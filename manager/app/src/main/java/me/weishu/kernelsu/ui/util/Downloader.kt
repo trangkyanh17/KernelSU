@@ -1,19 +1,10 @@
 package me.weishu.kernelsu.ui.util
 
 import android.annotation.SuppressLint
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.core.content.ContextCompat
-import androidx.core.net.toUri
 import me.weishu.kernelsu.ksuApp
 import me.weishu.kernelsu.ui.util.module.LatestVersionInfo
 import okhttp3.Request
@@ -39,7 +30,7 @@ fun download(
         try {
             ksuApp.okhttpClient.newCall(Request.Builder().url(url).build()).execute().use { resp ->
                 if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
-                val body = resp.body ?: throw IOException("Empty body")
+                val body = resp.body
                 val total = body.contentLength()
                 target.parentFile?.mkdirs()
                 FileOutputStream(target).use { fos ->
@@ -80,7 +71,7 @@ fun checkNewVersion(): LatestVersionInfo {
                 if (!response.isSuccessful) {
                     return defaultValue
                 }
-                val body = response.body?.string() ?: return defaultValue
+                val body = response.body.string()
                 val json = org.json.JSONObject(body)
                 val changelog = json.optString("body")
 
@@ -108,44 +99,4 @@ fun checkNewVersion(): LatestVersionInfo {
             }
     }
     return defaultValue
-}
-
-@Composable
-fun DownloadListener(context: Context, onDownloaded: (Uri) -> Unit) {
-    DisposableEffect(context) {
-        val receiver = object : BroadcastReceiver() {
-            @SuppressLint("Range")
-            override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action == DownloadManager.ACTION_DOWNLOAD_COMPLETE) {
-                    val id = intent.getLongExtra(
-                        DownloadManager.EXTRA_DOWNLOAD_ID, -1
-                    )
-                    val query = DownloadManager.Query().setFilterById(id)
-                    val downloadManager =
-                        context?.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                    val cursor = downloadManager.query(query)
-                    if (cursor.moveToFirst()) {
-                        val status = cursor.getInt(
-                            cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                        )
-                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                            val uri = cursor.getString(
-                                cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
-                            )
-                            onDownloaded(uri.toUri())
-                        }
-                    }
-                }
-            }
-        }
-        ContextCompat.registerReceiver(
-            context,
-            receiver,
-            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            ContextCompat.RECEIVER_EXPORTED
-        )
-        onDispose {
-            context.unregisterReceiver(receiver)
-        }
-    }
 }
